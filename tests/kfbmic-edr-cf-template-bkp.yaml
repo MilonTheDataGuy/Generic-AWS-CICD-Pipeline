@@ -1,0 +1,1315 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: "Create S3 with policies and Provision Glue with role and KMS key"
+
+Parameters:                                                                                                       
+  CustomerID:
+    Type: String
+    Description: "KFB"
+    AllowedValues:
+      - kfbmic 
+  
+  AWSEnvironment:
+    Type: String
+    Description: "What AWS environment is this being deployed in"
+    AllowedValues:
+      - np
+      - pp
+      - p
+
+  TeamName:
+    Type: String
+    Description: "What team is using this (likely edr)"
+
+  GWEnvironment:
+    Type: String
+    Description: "What GW environment are these buckets matching to"
+    AllowedValues:
+      - qa
+      - dev
+      - uat
+      - uat2
+      - preprod
+      - perf
+      - prod
+
+  AccountNumber:
+    Type: String
+    Description: "Account number this is being deployed in"
+    
+  AvailabilityZone:
+    Type: String
+    Description: "VPC availibility zone where glue job will run"
+  
+  SecurityGroupId:
+    Type: String
+    Description: "VPC SG to run glue jon in private network"  
+
+  SubnetId:
+    Type: String
+    Description: "VPC CIDR range "
+
+  EmailAddress:
+    Description: "Email Address to Subscribe sns topic."
+    Type: "String"
+    AllowedPattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+    ConstraintDescription: "Must be a valid Email Address."
+
+  GlueClass:
+    Type: String
+    Description: "GlueApp"
+
+  GwBcS3Bucket:
+    Type: String
+    Description: "GW BC S3 CDA Bucket"
+
+  GwBcDir:
+    Type: String
+    Default: ""
+    Description: "GW BC sub directory"
+
+  GwPcS3Bucket:
+    Type: String
+    Description: "GW PC S3 CDA Bucket"
+
+  GwPcDir:
+    Type: String
+    Default: ""
+    Description: "GW PC sub directory"
+
+  GwCcS3Bucket:
+    Type: String
+    Description: "GW CC S3 CDA Bucket"
+
+  GwCcDir:
+    Type: String
+    Default: ""
+    Description: "GW CC sub directory"
+
+  GwCmS3Bucket:
+    Type: String
+    Description: "GW Cm S3 CDA Bucket"
+
+  GwCmDir:
+    Type: String
+    Default: ""
+    Description: "GW CM sub directory"
+
+  BcS3InitialLoadFlag:
+    Type: String
+    Description: "String value containing BC S3 initial load flag"
+
+  BcS3IncrementalLoadFlag:
+    Type: String
+    Description: "String value containing BC S3 incremental load flag"
+
+  BcMrgInitialLoadFlag:
+    Type: String
+    Description: "String value containing BC MRG initial load flag"
+
+  BcMrgIncrementalLoadFlag:
+    Type: String
+    Description: "String value containing BC MRG incremental load flag"
+
+  PcS3InitialLoadFlag:
+    Type: String
+    Description: "String value containing PC S3 initial load flag"
+
+  PcS3IncrementalLoadFlag:
+    Type: String
+    Description: "String value containing PC S3 incremental load flag"
+
+  PcMrgInitialLoadFlag:
+    Type: String
+    Description: "String value containing PC MRG initial load flag"
+
+  PcMrgIncrementalLoadFlag:
+    Type: String
+    Description: "String value containing PC MRG incremental load flag"
+
+  CcS3InitialLoadFlag:
+    Type: String
+    Description: "String value containing CC S3 initial load flag"
+
+  CcMrgInitialLoadFlag:
+    Type: String
+    Description: "String value containing CC MRG initial load flag"
+
+  CcS3IncrementalLoadFlag:
+    Type: String
+    Description: "String value containing CC S3 incremental load flag"
+
+  CcMrgIncrementalLoadFlag:
+    Type: String
+    Description: "String value containing CC MRG incremental load flag"
+
+  CmS3InitialLoadFlag:
+    Type: String
+    Description: "String value containing CM S3 initial load flag"
+
+  CmS3IncrementalLoadFlag:
+    Type: String
+    Description: "String value containing CM S3 incremental load flag"
+
+  CmMrgInitialLoadFlag:
+    Type: String
+    Description: "String value containing CM MRG initial load flag"
+
+  CmMrgIncrementalLoadFlag:
+    Type: String
+    Description: "String value containing CM MRG incremental load flag"
+
+  StorageAWSIAMUserARN:
+    Type: String
+    Description: "The AWS IAM user created for your Snowflake account"
+
+  StorageAWSExternalID:
+    Type: String
+    Description: "The external ID that is needed to establish a trust relationship"
+
+  MatillionMemFeedUser:
+    Type: String
+    Description: "Matillion service id for Matillion - KFB Shared Location integration"
+
+  MatillionMemFeedPwd:
+    Type: String
+    Description: "Matillion service password for Matillion - KFB Shared Location integration"
+
+  SfDb:
+    Type: String
+    Description: "KFB SF Db Name"
+
+  SfAccount:
+    Type: String
+    Description: "KFB SF Account Name"
+
+  IAMRoleId:
+    Type: String
+    Description: "SSO IAM Role Id"
+
+  EnvironmentPrefix:
+    Type: String
+    Description: "AWS Env prefix"
+
+  EnvironmentType:
+    Type: String
+    Description: "AWS account type"
+
+  GlueServicePwd:
+    Type: String
+    Description: "Glue service password for glue service integration"
+
+  MatillionBankServicePwd:
+    Type: String
+    Description: "Matillion service password for Matillion - SF agency bank integration"
+
+  MatillionServicePwd:
+    Type: String
+    Description: "Matillion service password for Matillion - SF integration"
+
+  DataStageServicePwd:
+    Type: String
+    Description: "Datastage service password for Datastage - SF integration"
+
+  CRMClientId:
+    Type: String
+    Description: "CRM Endpoint authentication token Id"
+
+  CRMClientSecret:
+    Type: String
+    Description: "CRM Endpoint authentication token Secret"
+
+  CRMEnvironment:
+    Type: String
+    Description: "CRM Endpoint Environment"
+
+  BitbucketSfRepoUUID:
+    Type: String
+    Description: "Snowflake Repository UUID"
+
+  BitbucketSfEnvUUID:
+    Type: String
+    Description: "Snowflake Environment UUID"
+
+Resources: 
+############################### IAM Resources ###########################
+# Create Customer managed policy to attach to glue role
+  DataEngrGlueAccessPolicy:  
+    Type: AWS::IAM::ManagedPolicy  
+    Properties:  
+      Description: "This policy defines permissions required for Data Engineer role and Glue job"  
+      ManagedPolicyName: !Sub "${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-glue-access-policy-01"  
+      PolicyDocument:  
+        Version: "2012-10-17"  
+        Statement:  
+          - Sid: S3BucketAccess  
+            Effect: Allow  
+            Action:  
+              - s3:*  
+            Resource:  
+              - !Sub "arn:aws:s3:::${CustomerID}-${TeamName}-${AWSEnvironment}-*"  
+              - !Sub "arn:aws:s3:::${GwBcS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwBcS3Bucket}"  
+              - !Sub "arn:aws:s3:::${GwPcS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwPcS3Bucket}" 
+              - !Sub "arn:aws:s3:::${GwCcS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwCcS3Bucket}" 
+              - !Sub "arn:aws:s3:::${GwCmS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwCmS3Bucket}" 
+              - "arn:aws:s3:::awsserverlessrepo-changesets*"  
+              - "arn:aws:s3:::secrets-manager-rotation-apps-*/*"  
+          - Sid: SNSAccess  
+            Effect: Allow  
+            Action:  
+              - sns:List*  
+            Resource: "*"  
+          - Sid: SNSAccessSpecific  
+            Effect: Allow  
+            NotAction:  
+              - sns:List*  
+            Resource:  
+              - !Ref GlueSnsTopic 
+          - Sid: CloudWatchAllowAccess  
+            Effect: Allow  
+            Action:  
+              - cloudwatch:*  
+              - logs:* 
+            Resource:  
+              - "*" 
+          - Sid: CloudWatchDenyAccess  
+            Effect: Deny  
+            Action:  
+              - cloudwatch:Delete*  
+            Resource:  
+              - "*"  
+          - Sid: "OAMAccess"  
+            Effect: Allow  
+            Action:   
+              - oam:ListSinks  
+              - oam:ListAttachedLinks  
+            Resource:
+              - !Sub "arn:aws:oam:${AWS::Region}:${AWS::AccountId}:sink/*" 
+          - Sid: GlueAccess 
+            Effect: Allow  
+            Action:  
+              - glue:*  
+              - s3:GetBucketLocation  
+              - s3:ListBucket  
+              - s3:ListAllMyBuckets  
+              - s3:GetBucketAcl  
+              - ec2:DescribeVpcEndpoints  
+              - ec2:DescribeRouteTables  
+              - ec2:CreateNetworkInterface  
+              - ec2:DeleteNetworkInterface  
+              - ec2:DescribeNetworkInterfaces  
+              - ec2:DescribeSecurityGroups  
+              - ec2:DescribeSubnets  
+              - ec2:DescribeVpcAttribute  
+              - iam:ListRolePolicies  
+              - iam:GetRole  
+              - iam:GetRolePolicy  
+              - cloudwatch:PutMetricData  
+              - s3:CreateBucket  
+              - s3:GetObject  
+              - s3:PutObject  
+              - s3:DeleteObject  
+              - logs:CreateLogGroup  
+              - logs:CreateLogStream  
+              - logs:PutLogEvents  
+              - ec2:CreateTags  
+              - ec2:DeleteTags  
+            Resource:  
+              - "*"  
+              - "arn:aws:s3:::aws-glue-*"  
+              - "arn:aws:s3:::aws-glue-*/*"  
+              - "arn:aws:s3:::*/*aws-glue-*/*"  
+              - "arn:aws:s3:::crawler-public*"  
+              - "arn:aws:s3:::aws-glue-*"  
+              - "arn:aws:logs:*:*:*:/aws-glue/*"  
+              - "arn:aws:ec2:*:*:network-interface/*"  
+              - "arn:aws:ec2:*:*:security-group/*"  
+              - "arn:aws:ec2:*:*:instance/*"  
+            Condition:  
+              ForAllValues:StringEquals:  
+                aws:TagKeys:  
+                  - "aws-glue-service-resource"  
+          - Sid: SecretsManagerAccess  
+            Effect: Allow  
+            Action:  
+              - secretsmanager:*  
+            Resource:  
+              - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerID}-${TeamName}-${AWSEnvironment}-*"  
+          - Sid: KMSAccess  
+            Effect: Allow  
+            Action:  
+              - kms:GetPublicKey  
+              - kms:GetKeyRotationStatus  
+              - kms:GetKeyPolicy  
+              - kms:GenerateDataKey  
+              - kms:GenerateDataKeyWithoutPlaintext  
+              - kms:DescribeKey  
+              - kms:GenerateDataKeyPairWithoutPlaintext
+              - kms:GenerateDataKeyPair
+              - kms:Create*  
+              - kms:Encrypt  
+              - kms:Decrypt  
+              - kms:ReEncrypt*  
+              - kms:GenerateDataKey*  
+              - kms:DescribeKey  
+            Resource:  
+              - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${BucketKMSKey}"  
+          - Sid: KMSListAccess  
+            Effect: Allow  
+            Action:  
+              - kms:List* 
+            Resource:  
+              - "*" 
+
+# Create Glue IAM role
+  GWAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      #RoleName: !Sub '${AWSEnvironment}-gw-s3-access-role' # DO NOT EDIT
+      RoleName: !Sub '${CustomerID}-${AWSEnvironment}-gw-${GWEnvironment}-s3-access-role'
+      Description: "This role is used by Glue to access GW buckets and load them into KFB landing zone buckets"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      
+      ManagedPolicyArns:
+        - !Ref DataEngrGlueAccessPolicy
+    DeletionPolicy: Retain
+
+# Must create an instance profile for the role so it can be attached to correct glue role
+  RoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: !Sub "${CustomerID}-${AWSEnvironment}-gw-${GWEnvironment}-instance-profile"
+      Roles: 
+        - !Ref GWAccessRole
+
+# Snowflake CI/CD Managed Credentials Policy
+  SnowflakeCICDManagedIAMPolicy:  
+    Type: AWS::IAM::ManagedPolicy 
+    Properties:
+      Description: "This policy defines permissions required for Snowflake CI/CD Process"
+      ManagedPolicyName: !Sub "${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snowflake-cicd-managed-credentials-policy"
+      PolicyDocument:  
+        Version: "2012-10-17"  
+        Statement:  
+          - Action:  
+              - secretsmanager:GetResourcePolicy  
+              - secretsmanager:GetSecretValue  
+              - secretsmanager:DescribeSecret  
+              - secretsmanager:ListSecretVersionIds  
+            Resource:  
+              - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerID}-${TeamName}-${AWSEnvironment}-*"
+            Effect: Allow
+
+# Create Snowflake OIDC role
+  SnowflakeOIDCRole:  
+    Type: AWS::IAM::Role  
+    Properties:  
+      RoleName: !Sub "${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-dataplatform-sf-repo-oidc-role"
+      AssumeRolePolicyDocument:  
+        Version: "2012-10-17"  
+        Statement:  
+          - Effect: Allow  
+            Principal:  
+              Federated: !Sub "arn:aws:iam::${AccountNumber}:oidc-provider/api.bitbucket.org/2.0/workspaces/kyfb_git/pipelines-config/identity/oidc"  
+            Action: "sts:AssumeRoleWithWebIdentity"  
+            Condition:  
+              StringLike:  
+                "api.bitbucket.org/2.0/workspaces/kyfb_git/pipelines-config/identity/oidc:sub": !Sub "${BitbucketSfRepoUUID}*:${BitbucketSfEnvUUID}:*"
+              IpAddress:  
+                "aws:SourceIp":  
+                  - "34.199.54.113/32"  
+                  - "34.232.25.90/32"  
+                  - "34.232.119.183/32"  
+                  - "34.236.25.177/32"  
+                  - "35.171.175.212/32"  
+                  - "52.54.90.98/32"  
+                  - "52.202.195.162/32"  
+                  - "52.203.14.55/32"  
+                  - "52.204.96.37/32"  
+                  - "34.218.156.209/32"  
+                  - "34.218.168.212/32"  
+                  - "52.41.219.63/32"  
+                  - "35.155.178.254/32"  
+                  - "35.160.177.10/32"  
+                  - "34.216.18.129/32"  
+      ManagedPolicyArns:  
+        - !Ref SnowflakeCICDManagedIAMPolicy  
+        - !Sub "arn:aws:iam::${AccountNumber}:policy/${CustomerID}-${TeamName}-${AWSEnvironment}-snowflake-cicd-managed-credentials" 
+
+# Matillion Custom Policy  
+  MatillionPolicy:  
+    Type: "AWS::IAM::ManagedPolicy"  
+    Properties:  
+      Description: "This policy defines permissions required for Matillion instance"  
+      ManagedPolicyName: !Sub "${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-matillion-access-policy"  
+      PolicyDocument:  
+        Version: "2012-10-17"  
+        Statement:  
+          - Sid: S3BucketAccess  
+            Effect: Allow  
+            Action:  
+              - s3:*  
+            Resource:  
+              - !Sub "arn:aws:s3:::${CustomerID}-${TeamName}-${AWSEnvironment}-*"  
+              - !Sub "arn:aws:s3:::${GwBcS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwBcS3Bucket}"  
+              - !Sub "arn:aws:s3:::${GwPcS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwPcS3Bucket}"  
+              - !Sub "arn:aws:s3:::${GwCcS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwCcS3Bucket}"  
+              - !Sub "arn:aws:s3:::${GwCmS3Bucket}/*"  
+              - !Sub "arn:aws:s3:::${GwCmS3Bucket}"  
+              - "arn:aws:s3:::awsserverlessrepo-changesets*"  
+              - "arn:aws:s3:::secrets-manager-rotation-apps-*/*"  
+          - Sid: SNSAccess  
+            Effect: Allow  
+            Action:  
+              - sns:List*  
+            Resource: "*"  
+          - Sid: SNSAccessSpecific  
+            Effect: Allow  
+            Action:  
+              - sns:*  
+            Resource:  
+              - !Ref GlueSnsTopic  
+          - Sid: CloudWatchAllowAccess  
+            Effect: Allow  
+            Action:  
+              - cloudwatch:*  
+              - logs:*  
+            Resource:  
+              - "*"  
+          - Sid: CloudWatchDenyAccess  
+            Effect: Deny  
+            Action:  
+              - cloudwatch:Delete*  
+            Resource:  
+              - "*"  
+          - Sid: OAMAccess  
+            Effect: Allow  
+            Action:  
+              - oam:ListSinks  
+              - oam:ListAttachedLinks  
+            Resource:  
+              - !Sub "arn:aws:oam:${AWS::Region}:${AWS::AccountId}:sink/*"  
+          - Sid: GlueAccess  
+            Effect: Allow  
+            Action:  
+              - glue:*  
+            Resource:  
+              - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/*"
+          - Sid: SecretsManagerAccess  
+            Effect: Allow  
+            Action:  
+              - secretsmanager:*  
+            Resource:  
+              - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerID}-${TeamName}-${AWSEnvironment}-*"  
+          - Sid: KMSAccess  
+            Effect: Allow  
+            Action:  
+              - kms:GetPublicKey  
+              - kms:GetKeyRotationStatus  
+              - kms:GetKeyPolicy  
+              - kms:GenerateDataKey  
+              - kms:GenerateDataKeyWithoutPlaintext  
+              - kms:DescribeKey  
+              - kms:GenerateDataKeyPairWithoutPlaintext  
+              - kms:GenerateDataKeyPair  
+              - kms:Create*  
+              - kms:Encrypt  
+              - kms:Decrypt  
+              - kms:ReEncrypt*  
+              - kms:GenerateDataKey*  
+              - kms:DescribeKey  
+            Resource:  
+              - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${BucketKMSKey}"  
+          - Sid: KMSListAccess  
+            Effect: Allow  
+            Action:  
+              - kms:List*  
+            Resource:  
+              - "*"  
+          - Sid: AccessSSM  
+            Effect: Allow  
+            Action:  
+              - iam:CreateServiceLinkedRole  
+              - ssm:*  
+            Resource: "arn:aws:iam::*:role/aws-service-role/ssm.amazonaws.com/AWSServiceRoleForAmazonSSM*"  
+            Condition:  
+              StringLike:  
+                "iam:AWSServiceName": "ssm.amazonaws.com"  
+
+# Snowflake Storage Integration IAM Policy
+  KfbEdrSnowflakePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "This policy defines permissions required for Data Engineer role and Glue job"
+      ManagedPolicyName: !Sub "${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snowflake-policy"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3BucketAccess
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource:
+              - !Sub "arn:aws:s3:::${CustomerID}-${TeamName}-${AWSEnvironment}-*"
+          - Sid: KMSAccess
+            Effect: Allow
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource:  
+              - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${BucketKMSKey}"  
+          - Sid: KMSListAccess  
+            Effect: Allow  
+            Action:  
+              - kms:List* 
+            Resource:  
+              - "*" 
+
+# Snowflake Storage Integration IAM Role
+  KfbEdrSnowflakeRole:
+    DependsOn:
+      - "KfbEdrSnowflakePolicy"
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snowflake-role'
+      Description: !Sub "${AWSEnvironment} role for Snowflake Storage Integration to have access to ${GWEnvironment} landing buckets."
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            Effect: "Allow"
+            Principal:
+              AWS: !Sub "${StorageAWSIAMUserARN}"
+            Action:
+              - "sts:AssumeRole"
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Sub "${StorageAWSExternalID}"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref KfbEdrSnowflakePolicy
+      Tags:
+        - Key: Name
+          Value: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snowflake-role'
+
+#######################################   Create S3 Resources   ###################################
+# Create the PC landing bucket 
+  S3BucketPC:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket for raw GW PC landing data
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-landing-zone-pc-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-S3LifecycleRules
+            Status: Disabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: DEEP_ARCHIVE
+
+# Create the BC landing bucket
+  S3BucketBC:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket for raw GW BC landing data
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-landing-zone-bc-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms' 
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-S3LifecycleRules
+            Status: Disabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: DEEP_ARCHIVE              
+  
+# Create the CC landing bucket 
+  S3BucketCC:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket for raw GW CC landing data
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-landing-zone-cc-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-S3LifecycleRules
+            Status: Disabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: DEEP_ARCHIVE
+
+# Create the CM landing bucket 
+  S3BucketCM:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket for raw GW CM landing data
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-landing-zone-cm-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-S3LifecycleRules
+            Status: Disabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: DEEP_ARCHIVE
+
+# Create the Glue Repo Bucket
+  S3BucketGlueRepo:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket to store Glue code
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-glue-code-repo-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+
+# create the S3 extracts bucket for CDP - Downstream
+  S3BucketExtract:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket for raw GW CM landing data
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-extracts-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-S3LifecycleRules
+            Status: Disabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: DEEP_ARCHIVE
+
+# Create the legacy bucket
+  S3BucketLegacy:
+    Type: AWS::S3::Bucket
+    Description: S3 Bucket to store kfb legacy source data
+    Properties:
+      BucketName: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-legacy-${GWEnvironment}-landing-zone-01-bucket # DO NOT EDIT
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+          ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${s3KeyAlias}'
+              SSEAlgorithm: 'aws:kms'
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub ${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-S3LifecycleRules
+            Status: Disabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: DEEP_ARCHIVE
+
+# Create the bucket policy for Extract S3 bucket to restrict the ACH file 
+  BucketPolicy:  
+    Type: "AWS::S3::BucketPolicy"  
+    Properties:  
+      Bucket: !Ref S3BucketExtract  
+      PolicyDocument:  
+        Version: "2012-10-17"  
+        Statement:  
+          - Effect: "Deny"  
+            Principal: "*"  
+            Action: "s3:*"  
+            Resource:
+              - !Sub "arn:aws:s3:::${S3BucketExtract}"
+              - !Sub "arn:aws:s3:::${S3BucketExtract}/*"  
+            Condition:
+              StringNotLike:
+                aws:userId: !Ref IAMRoleId
+              StringLike:
+                s3:prefix: "ACH/"  
+
+############################### Secret Manager Resources ##########################
+# Create the Matillion Service secret for integrate the Matillion and Snowflake 
+  SecretMatillionService:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-matillion-snowflake-service-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - Matillion Service credentials for secure integration with Snowflake'
+      SecretString: !Sub |
+        {
+          "SNOWFLAKE_ACCOUNT": "${SfAccount}",
+          "SNOWFLAKE_USER": "${EnvironmentPrefix}__MATILLION__SVC_USR",
+          "SNOWFLAKE_PASSWORD": "${MatillionServicePwd}",
+          "SNOWFLAKE_ROLE": "${EnvironmentPrefix}__MATILLION__SVC_ROLE",
+          "SNOWFLAKE_WAREHOUSE": "WH_MATILLION_LG",
+          "SNOWFLAKE_DATABASE" : "${SfDb}"
+        }
+
+# Create the Matillion Service secret for integrate the Matillion agency bank and Snowflake 
+  SecretMatillionBankService:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-matillion-snowflake-service-agency-bank-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - Matillion Service credentials to integrate with Snowflake for agency bank details'
+      SecretString: !Sub |
+        {
+          "SNOWFLAKE_ACCOUNT" : "${SfAccount}",
+          "SNOWFLAKE_USER": "${EnvironmentPrefix}__SERVICE_AGENCY_BANK__SVC_USR",
+          "SNOWFLAKE_PASSWORD": "${MatillionBankServicePwd}",
+          "SNOWFLAKE_ROLE" : "${EnvironmentPrefix}__SERVICE_AGENCY_BANK__SVC_ROLE",
+          "SNOWFLAKE_WAREHOUSE" : "WH_MATILLION_SM",
+          "SNOWFLAKE_DATABASE" : "${SfDb}"
+        }
+
+# Create the genric Service secret for env config 
+  SecretEnvConfigService:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-env-config-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - Generic env details for config for secure integration with different resources'
+      SecretString: !Sub | 
+        {  
+          "SNOWFLAKE_DATABASE": "${SfDb}",  
+          "ENVIRONMENT_PREFIX": "${EnvironmentPrefix}",  
+          "BC_LANDING_BUCKET": "S3://${S3BucketBC}/",
+          "BC_S3_INITIAL_LOAD_FLAG": "${BcS3InitialLoadFlag}",
+          "BC_S3_INCREMENTAL_LOAD_FLAG": "${BcS3IncrementalLoadFlag}",
+          "BC_MRG_INITIAL_LOAD_FLAG": "${BcMrgInitialLoadFlag}",
+          "BC_MRG_INCREMENTAL_LOAD_FLAG": "${BcMrgIncrementalLoadFlag}",
+          "PC_LANDING_BUCKET": "S3://${S3BucketPC}/",
+          "PC_S3_INITIAL_LOAD_FLAG": "${PcS3InitialLoadFlag}",  
+          "PC_S3_INCREMENTAL_LOAD_FLAG": "${PcS3IncrementalLoadFlag}",
+          "PC_MRG_INITIAL_LOAD_FLAG": "${PcMrgInitialLoadFlag}", 
+          "PC_MRG_INCREMENTAL_LOAD_FLAG": "${PcMrgIncrementalLoadFlag}",  
+          "CC_LANDING_BUCKET": "S3://${S3BucketCC}/", 
+          "CC_S3_INITIAL_LOAD_FLAG": "${CcS3InitialLoadFlag}",  
+          "CC_S3_INCREMENTAL_LOAD_FLAG": "${CcS3IncrementalLoadFlag}",  
+          "CC_MRG_INITIAL_LOAD_FLAG": "${CcMrgInitialLoadFlag}",
+          "CC_MRG_INCREMENTAL_LOAD_FLAG": "${CcMrgIncrementalLoadFlag}",  
+          "CM_LANDING_BUCKET": "S3://${S3BucketCM}/",
+          "CM_S3_INITIAL_LOAD_FLAG": "${CmS3InitialLoadFlag}",  
+          "CM_S3_INCREMENTAL_LOAD_FLAG": "${CmS3IncrementalLoadFlag}", 
+          "CM_MRG_INITIAL_LOAD_FLAG": "${CmMrgInitialLoadFlag}", 
+          "CM_MRG_INCREMENTAL_LOAD_FLAG": "${CmMrgIncrementalLoadFlag}",
+          "STORAGE_INTEGRATION": "S3_STRG_INT_${EnvironmentType}_${EnvironmentPrefix}"  
+        }
+
+# Create the Glue Service secret for integrate the Glue and Snowflake 
+  SecretGlueService:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-glue-snowflake-service-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - Glue Service credentials for secure integration with Snowflake'
+      SecretString: !Sub |
+        {
+          "SNOWFLAKE_ACCOUNT" : "${SfAccount}",
+          "SNOWFLAKE_USER": "${EnvironmentPrefix}__GLUE__SVC_USR",
+          "SNOWFLAKE_PASSWORD": "${GlueServicePwd}",
+          "SNOWFLAKE_ROLE" : "${EnvironmentPrefix}__GLUE__SVC_ROLE",
+          "SNOWFLAKE_WAREHOUSE" : "WH_MATILLION_LG",
+          "SNOWFLAKE_DATABASE" : "${SfDb}"
+        }
+
+# Create the DataStage Service secret for integrate the DataStage and Snowflake 
+  DataStageService:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-datastage-snowflake-service-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - datastage Service credentials for secure integration with Snowflake'
+      SecretString: !Sub |
+        {
+          "SNOWFLAKE_ACCOUNT" : "${SfAccount}",
+          "SNOWFLAKE_USER": "${EnvironmentPrefix}__DATASTAGE__SVC_USR",
+          "SNOWFLAKE_PASSWORD": "${DataStageServicePwd}",
+          "SNOWFLAKE_ROLE" : "${EnvironmentPrefix}__DATASTAGE__SVC_ROLE",
+          "SNOWFLAKE_WAREHOUSE" : "WH_MATILLION_SM",
+          "SNOWFLAKE_DATABASE" : "${SfDb}"
+        }
+
+# Create the Matillion Service secret for membership feed (ACH & 5/3rd)
+  SecretMatillionMemFeed:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-matillion-membership-feed-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - Matillion Service credentials for membership feed integration'
+      SecretString: !Sub |
+        {
+          "user_name" : "${MatillionMemFeedUser}",
+          "password": "${MatillionMemFeedPwd}"
+        }
+
+# Create the secret for CRM enpoint
+  SecretCRMEndpont:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-${CRMEnvironment}-crm-secret'
+      Description: !Sub '${EnvironmentPrefix} environment level secret - Euclid(CRM) Service credentials for Endpoint integration'
+      SecretString: !Sub |
+        {
+          "client_id" : "${CRMClientId}",
+          "client_secret": "${CRMClientSecret}"
+        }
+
+#######################################   KMS Resources   ###################################
+# Create KMS key to be used in all of the buckets
+  BucketKMSKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      EnableKeyRotation: true
+      PendingWindowInDays: 20
+      KeyPolicy:
+          Version: 2012-10-17
+          Id: key-s3
+          Statement:
+            - Sid: Enable IAM User Permissions
+              Effect: Allow
+              Principal:
+                AWS: !Join
+                  - ''
+                  - - 'arn:aws:iam::'
+                    - !Ref 'AWS::AccountId'
+                    - ':root'
+              Action: 'kms:*'
+              Resource: '*'
+            - Sid: Allow VPC Flow Logs to use the key as well
+              Effect: Allow
+              Principal:
+                Service:
+                  - delivery.logs.amazonaws.com
+              Action: 'kms:GenerateDataKey*'
+              Resource: '*'
+
+# Create alias for the KMS key for the buckets to use
+  s3KeyAlias:
+      Type: AWS::KMS::Alias
+      Properties:
+        AliasName: !Sub "alias/${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-kms-key"
+        TargetKeyId:
+          Ref: BucketKMSKey
+
+#######################################   SNS Resources   ###################################
+# Create the SNS topics
+  GlueSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId:
+        Fn::GetAtt:
+        - BucketKMSKey
+        - Arn
+      TopicName: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snstopic'
+      DisplayName: !Sub 'R2 Data Platform - ${EnvironmentPrefix}'
+      Subscription:
+        - Endpoint:
+            !Ref EmailAddress
+          Protocol: email
+
+#############################  Glue Resources #################################
+# Create a database to contain tables created by the crawler
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub ${CustomerID}-${AWSEnvironment}-gw-${GWEnvironment}-glue-database
+        Description: "AWS Glue container to metadata tables for any data crawler"
+
+# Create a crawler to crawl any  data on a S3 bucket
+  GlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub ${CustomerID}-${AWSEnvironment}-gw-${GWEnvironment}-gluecrawler
+      Role: !GetAtt GWAccessRole.Arn
+      Description: AWS Glue crawler to crawl flights data
+      DatabaseName: !Ref GlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Ref S3BucketPC
+          - Path: !Ref S3BucketBC
+          - Path: !Ref S3BucketCC
+          - Path: !Ref S3BucketCM
+      TablePrefix: !Sub ${CustomerID}-${AWSEnvironment}-gw-${GWEnvironment}-glue-table-prefix
+
+# Create the glue security configuration
+  GlueSecurityConfiguration:
+    Type: AWS::Glue::SecurityConfiguration
+    Properties:
+      EncryptionConfiguration:
+        S3Encryptions:
+          - S3EncryptionMode: SSE-S3
+      Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-glue-job-encryption'
+
+# Create the glue connection
+  GlueConnection:
+    Type: AWS::Glue::Connection
+    Properties:
+      CatalogId: !Ref AccountNumber
+      ConnectionInput:
+        Name: !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-gw-${GWEnvironment}-connector'
+        ConnectionType: NETWORK
+        PhysicalConnectionRequirements:
+          AvailabilityZone: !Ref AvailabilityZone
+          SecurityGroupIdList: 
+            - !Ref SecurityGroupId
+          SubnetId: !Ref SubnetId
+
+# Create the Glue initial job configuration to copy GW CDA S3 objects to KFB S3
+  InitialLoad: 
+    DependsOn:
+      - "GWAccessRole"
+      - "S3BucketGlueRepo"
+      - "GlueSecurityConfiguration"
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !Ref GWAccessRole
+      Name: !Sub "GW_S3_CDA_Replication_Job_Initial_Load_${GWEnvironment}" 
+      Command: {
+        "Name" : "glueetl",
+        "ScriptLocation": !Sub "s3://${S3BucketGlueRepo}/Scripts/GW_S3_CDA_Replication_Job_Initial_Load_${GWEnvironment}.py" # Change glue job script name here
+      }
+      DefaultArguments: {
+          "--job-bookmark-option": "job-bookmark-enable",
+          "--enable-job-insights": "true",
+          "--enable-auto-scaling": "true",
+          "--enable-spark-ui": "true",
+          "--enable-metrics": "true",
+          "--enable-continuous-cloudwatch-log": "true",
+          "--enable-glue-datacatalog": "true",
+          "--class" : !Ref GlueClass,
+          "--continuous-log-logGroup" : "GW_S3_CDA_Replication_Job_Initial_Load",
+          "--continuous-log-logStreamPrefix" : "GW_S3_CDA_Replication_Job_Initial_Load",
+          "--gw_bc_dir" : !Ref GwBcDir,
+          "--gw_bc_s3_bucket" : !Ref GwBcS3Bucket,
+          "--gw_cc_dir" : !Ref GwCcDir,
+          "--gw_cc_s3_bucket" : !Ref GwCcS3Bucket,
+          "--gw_cm_dir" : !Ref GwCmDir,
+          "--gw_cm_s3_bucket" : !Ref GwCmS3Bucket,
+          "--gw_pc_dir" : !Ref GwPcDir,
+          "--gw_pc_s3_bucket" : !Ref GwPcS3Bucket,
+          "--kfb_s3_bc_bucket" : !Ref S3BucketBC,
+          "--kfb_s3_cc_bucket" : !Ref S3BucketCC,
+          "--kfb_s3_cm_bucket" : !Ref S3BucketCM,
+          "--kfb_s3_pc_bucket" : !Ref S3BucketPC,
+          "--sns_topic_name" : !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snstopic',
+          "--spark-event-logs-path": !Sub "s3://${S3BucketGlueRepo}/Spark-UI-logs/",
+          "--TempDir": !Sub "s3://${S3BucketGlueRepo}/Temporary-path/"
+      }
+      ExecutionProperty: 
+        MaxConcurrentRuns: 16
+      NotificationProperty: 
+        NotifyDelayAfter: 120
+      MaxRetries: 0
+      GlueVersion: '4.0'
+      WorkerType: 'G.4X'
+      NumberOfWorkers: 10
+      SecurityConfiguration: !Ref GlueSecurityConfiguration
+      Timeout: 240
+      Description: "Initial Job to copy the delta files from GW CDA buckets" 
+      Connections:
+        Connections: [!Ref GlueConnection]
+        
+# Create the Glue incremental job configuration to copy GW CDA S3 objects to KFB S3
+  IncrementalLoad: 
+    DependsOn:
+      - "GWAccessRole"
+      - "S3BucketGlueRepo"
+      - "GlueSecurityConfiguration"
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !Ref GWAccessRole
+      Name: !Sub "GW_S3_CDA_Replication_Job_Incremental_Load_${GWEnvironment}"  
+      Command: {
+        "Name" : "glueetl",
+        "ScriptLocation": !Sub "s3://${S3BucketGlueRepo}/Scripts/GW_S3_CDA_Replication_Job_Incremental_Load_${GWEnvironment}.py" # Change glue job script name here
+      }
+      DefaultArguments: {
+          "--job-bookmark-option": "job-bookmark-enable",
+          "--enable-job-insights": "true",
+          "--enable-auto-scaling": "true",
+          "--enable-spark-ui": "true",
+          "--enable-metrics": "true",
+          "--enable-continuous-cloudwatch-log": "true",
+          "--enable-glue-datacatalog": "true",
+          "--class" : !Ref GlueClass,
+          "--continuous-log-logGroup" : "GW_S3_CDA_Replication_Job_Incremental_Load",
+          "--continuous-log-logStreamPrefix" : "GW_S3_CDA_Replication_Job_Incremental_Load",
+          "--gw_bc_dir" : !Ref GwBcDir,
+          "--gw_bc_s3_bucket" : !Ref GwBcS3Bucket,
+          "--gw_cc_dir" : !Ref GwCcDir,
+          "--gw_cc_s3_bucket" : !Ref GwCcS3Bucket,
+          "--gw_cm_dir" : !Ref GwCmDir,
+          "--gw_cm_s3_bucket" : !Ref GwCmS3Bucket,
+          "--gw_pc_dir" : !Ref GwPcDir,
+          "--gw_pc_s3_bucket" : !Ref GwPcS3Bucket,
+          "--kfb_s3_bc_bucket" : !Ref S3BucketBC,
+          "--kfb_s3_cc_bucket" : !Ref S3BucketCC,
+          "--kfb_s3_cm_bucket" : !Ref S3BucketCM,
+          "--kfb_s3_pc_bucket" : !Ref S3BucketPC,
+          "--sns_topic_name" : !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snstopic',
+          "--spark-event-logs-path": !Sub "s3://${S3BucketGlueRepo}/Spark-UI-logs/",
+          "--TempDir": !Sub "s3://${S3BucketGlueRepo}/Temporary-path/"
+      }
+      ExecutionProperty: 
+        MaxConcurrentRuns: 16
+      NotificationProperty: 
+        NotifyDelayAfter: 15
+      MaxRetries: 0
+      GlueVersion: '4.0'
+      WorkerType: 'G.2X'
+      NumberOfWorkers: 10
+      SecurityConfiguration: !Ref GlueSecurityConfiguration
+      Timeout: 30
+      Description: "Incremental Job to copy the delta files from GW CDA buckets" 
+      Connections:
+        Connections: [!Ref GlueConnection]
+
+# Glue initial job to load S3 to Snowflake MRG layer
+  SnowflakeInitialMrgLoad: 
+    DependsOn:
+      - "GWAccessRole"
+      - "S3BucketGlueRepo"
+      - "GlueSecurityConfiguration"
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !Ref GWAccessRole
+      Name: !Sub "Snowflake_Initial_MRG_Load_${GWEnvironment}"  
+      Command: {
+        "Name" : "glueetl",
+        "ScriptLocation": !Sub "s3://${S3BucketGlueRepo}/Scripts/Snowflake_Initial_MRG_Load_${GWEnvironment}.py" # Change glue job script name here
+      }
+      DefaultArguments: {
+          "--job-bookmark-option": "job-bookmark-enable",
+          "--enable-job-insights": "true",
+          "--enable-auto-scaling": "true",
+          "--enable-spark-ui": "true",
+          "--enable-metrics": "true",
+          "--enable-continuous-cloudwatch-log": "true",
+          "--encryption-type": "sse-s3",
+          "--class" : !Ref GlueClass,
+          "--additional-python-modules": "snowflake-connector-python,structlog",
+          "--python-modules-installer-option": "--upgrade",
+          "--continuous-log-logGroup" : "Snowflake-Initial-MRG-Load",
+          "--continuous-log-logStreamPrefix" : "Snowflake-Initial-MRG-Load",
+          "--sns_topic_name" : !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snstopic',
+          "--secrets_name": !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-glue-snowflake-service-secret',
+          "--spark-event-logs-path": !Sub "s3://${S3BucketGlueRepo}/Spark-UI-logs/",
+          "--TempDir": !Sub "s3://${S3BucketGlueRepo}/Temporary-path/"
+      }
+      ExecutionProperty: 
+        MaxConcurrentRuns: 12
+      NotificationProperty: 
+        NotifyDelayAfter: 240
+      MaxRetries: 0
+      GlueVersion: '4.0'
+      WorkerType: 'G.2X'
+      NumberOfWorkers: 10
+      SecurityConfiguration: !Ref GlueSecurityConfiguration
+      Timeout: 1200
+      Description: "Initial Job to load the cda data from kfb s3 to snowflake merge layer" 
+
+# Glue incremental job to load S3 to Snowflake MRG layer
+  SnowflakeMrgLoad: 
+    DependsOn:
+      - "GWAccessRole"
+      - "S3BucketGlueRepo"
+      - "GlueSecurityConfiguration"
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !Ref GWAccessRole
+      Name: !Sub "Snowflake_Incremental_MRG_Load_${GWEnvironment}"  
+      Command: {
+        "Name" : "glueetl",
+        "ScriptLocation": !Sub "s3://${S3BucketGlueRepo}/Scripts/Snowflake_Incremental_MRG_Load_${GWEnvironment}.py" # Change glue job script name here
+      }
+      DefaultArguments: {
+          "--job-bookmark-option": "job-bookmark-enable",
+          "--enable-job-insights": "true",
+          "--enable-auto-scaling": "true",
+          "--enable-spark-ui": "true",
+          "--enable-metrics": "true",
+          "--enable-continuous-cloudwatch-log": "true",
+          "--encryption-type": "sse-s3",
+          "--class" : !Ref GlueClass,
+          "--additional-python-modules": "snowflake-connector-python,structlog",
+          "--python-modules-installer-option": "--upgrade",
+          "--continuous-log-logGroup" : "Snowflake-Incremental-MRG-Load",
+          "--continuous-log-logStreamPrefix" : "Snowflake-Incremental-MRG-Load",
+          "--sns_topic_name" : !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snstopic',
+          "--secrets_name": !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-glue-snowflake-service-secret',
+          "--spark-event-logs-path": !Sub "s3://${S3BucketGlueRepo}/Spark-UI-logs/",
+          "--TempDir": !Sub "s3://${S3BucketGlueRepo}/Temporary-path/"
+      }
+      ExecutionProperty: 
+        MaxConcurrentRuns: 12
+      NotificationProperty: 
+        NotifyDelayAfter: 30
+      MaxRetries: 0
+      GlueVersion: '4.0'
+      WorkerType: 'G.2X'
+      NumberOfWorkers: 10
+      SecurityConfiguration: !Ref GlueSecurityConfiguration
+      Timeout: 600
+      Description: "Incremental Job to load the cda data from kfb s3 to snowflake merge layer" 
+
+# Glue job to retrieve Deep Archival S3 Objects
+  DeepArchivalS3Objects: 
+    DependsOn:
+      - "GWAccessRole"
+      - "S3BucketGlueRepo"
+      - "GlueSecurityConfiguration"
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !Ref GWAccessRole
+      Name: !Sub "Retrieve_Deep_Archival_S3_Objects_${GWEnvironment}"  
+      Command: {
+        "Name" : "glueetl",
+        "ScriptLocation": !Sub "s3://${S3BucketGlueRepo}/Scripts/Retrieve_Deep_Archival_S3_Objects_${GWEnvironment}.py" # Change glue job script name here
+      }
+      DefaultArguments: {
+          "--job-bookmark-option": "job-bookmark-enable",
+          "--enable-job-insights": "true",
+          "--enable-auto-scaling": "true",
+          "--enable-spark-ui": "true",
+          "--enable-metrics": "true",
+          "--enable-continuous-cloudwatch-log": "true",
+          "--encryption-type": "sse-s3",
+          "--class" : !Ref GlueClass,
+          "--spark-event-logs-path": !Sub "s3://${S3BucketGlueRepo}/Spark-UI-logs/",
+          "--TempDir": !Sub "s3://${S3BucketGlueRepo}/Temporary-path/"
+      }
+      ExecutionProperty: 
+        MaxConcurrentRuns: 8
+      NotificationProperty: 
+        NotifyDelayAfter: 120
+      MaxRetries: 0
+      GlueVersion: '4.0'
+      WorkerType: 'G.2X'
+      NumberOfWorkers: 10
+      SecurityConfiguration: !Ref GlueSecurityConfiguration
+      Timeout: 2880
+      Description: "This job is refer to retrieve the S3 objects from Deep Archival storage and make it available" 
+
+# Glue job for CRM API ingestion
+  CRMApiIngestion: 
+    DependsOn:
+      - "GWAccessRole"
+      - "S3BucketGlueRepo"
+      - "GlueSecurityConfiguration"
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !Ref GWAccessRole
+      Name: !Sub "CRM_API_Integration_Job_${GWEnvironment}"  
+      Command: {
+        "Name" : "glueetl",
+        "ScriptLocation": !Sub "s3://${S3BucketGlueRepo}/Scripts/CRM_API_Integration_Job_${GWEnvironment}.py" # Change glue job script name here
+      }
+      DefaultArguments: {
+          "--job-bookmark-option": "job-bookmark-enable",
+          "--enable-job-insights": "true",
+          "--enable-auto-scaling": "true",
+          "--enable-spark-ui": "true",
+          "--enable-metrics": "true",
+          "--enable-continuous-cloudwatch-log": "true",
+          "--encryption-type": "sse-s3",
+          "--class" : !Ref GlueClass,
+          "--additional-python-modules": "snowflake-connector-python,snowflake-snowpark-python",
+          "--python-modules-installer-option": "--upgrade",
+          "--continuous-log-logGroup" : "CRM_API_Integration_Load",
+          "--continuous-log-logStreamPrefix" : "CRM_API_Integration_Load",
+          "--sns_topic_name" : !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-snstopic',
+          "--glue_sf_secret": !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-glue-snowflake-service-secret',
+          "--euclid_secret": !Sub '${CustomerID}-${TeamName}-${AWSEnvironment}-${GWEnvironment}-${CRMEnvironment}-crm-secret',
+          "--spark-event-logs-path": !Sub "s3://${S3BucketGlueRepo}/Spark-UI-logs/",
+          "--TempDir": !Sub "s3://${S3BucketGlueRepo}/Temporary-path/"
+      }
+      ExecutionProperty: 
+        MaxConcurrentRuns: 12
+      NotificationProperty: 
+        NotifyDelayAfter: 60
+      MaxRetries: 0
+      GlueVersion: '4.0'
+      WorkerType: 'G.2X'
+      NumberOfWorkers: 10
+      SecurityConfiguration: !Ref GlueSecurityConfiguration
+      Timeout: 120
+      Description: "This job is refer to the ClearVantage CRM APIs integration." 

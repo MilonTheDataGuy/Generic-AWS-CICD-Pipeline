@@ -1,0 +1,147 @@
+[
+    {
+      "ParameterKey": "CustomerID",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "AWSEnvironment",
+      "ParameterValue": "np"
+    },
+    {
+      "ParameterKey": "AWSAccountName",
+      "ParameterValue": "NonProd"
+    },
+    {
+      "ParameterKey": "TeamName",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GWEnvironment",
+      "ParameterValue": "dev"
+    },
+    {
+      "ParameterKey": "AccountNumber",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "AvailabilityZone",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "SecurityGroupId",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "SubnetId",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "EmailAddress",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GlueClass",
+      "ParameterValue": "GlueApp"
+    },
+    {
+      "ParameterKey": "GwBcS3Bucket",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwBcDir",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwPcS3Bucket",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwPcDir",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwCcS3Bucket",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwCcDir",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwCmS3Bucket",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "GwCmDir",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "StorageAWSIAMUserARN",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "StorageAWSExternalID",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "SfDb",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "SfAccount",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "IAMRoleId",
+      "ParameterValue": ":*"
+    },
+    {
+      "ParameterKey": "EnvironmentPrefix",
+      "ParameterValue": "DEV"
+    },
+    {
+      "ParameterKey": "MatillionServicePwd",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "MatillionBankServicePwd",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "GlueServicePwd",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "DataStageServicePwd",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "CRMClientId",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "CRMClientSecret",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "CRMEnvironment",
+      "ParameterValue": "test"
+    },
+    {
+      "ParameterKey": "PowerBiClientId",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "PowerBiClientSecret",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "BitbucketSfRepoUUID",
+      "ParameterValue": "${}"
+    },
+    {
+      "ParameterKey": "BitbucketSfEnvUUID",
+      "ParameterValue": "${}"
+    }
+   
+]

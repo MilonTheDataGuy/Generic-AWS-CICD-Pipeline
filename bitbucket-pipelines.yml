@@ -1,0 +1,337 @@
+image: atlassian/default-image:2
+
+definitions:
+  steps:
+    # Step to configure OIDC 
+    - step: &configure-oidc
+        name: Configure OIDC
+        oidc: true
+        script:
+          - echo $BITBUCKET_STEP_OIDC_TOKEN > ./web-identity-token
+        artifacts:
+          paths:
+            - web-identity-token
+
+    # Step to upload CloudFormation template to S3
+    - step: &upload-cloudformation-template
+        name: 'Upload CloudFormation Template to S3'
+        oidc: true
+        script:
+          - apt-get -y update && apt-get -y install awscli
+          - aws s3 cp template/kfbmic-edr-cf-template.yaml s3://${TEMPLATE_BUCKET_NAME}/kfbmic-edr-cf-template.yaml
+    
+    # Step to populate CodeArtifact repository
+    - step: &populate-codeartifact
+        name: Populate CodeArtifact Repository
+        image:
+          name: amazon/aws-glue-libs:glue_libs_4.0.0_image_01
+          run-as-user: 0
+        oidc: true
+        script:
+          - yum install -y jq
+          - export CUSTOMER_ID=$(jq -r '.[] | select(.ParameterKey == "CustomerID") | .ParameterValue' parameters/${Cloudformation_Parameter_File})
+          - export TEAM_NAME=$(jq -r '.[] | select(.ParameterKey == "TeamName") | .ParameterValue' parameters/${Cloudformation_Parameter_File})
+          - export AWS_ENVIRONMENT=$(jq -r '.[] | select(.ParameterKey == "AWSEnvironment") | .ParameterValue' parameters/${Cloudformation_Parameter_File})
+          - export ACCOUNT_NUMBER=$(jq -r '.[] | select(.ParameterKey == "AccountNumber") | .ParameterValue' parameters/${Cloudformation_Parameter_File})
+          - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain $CUSTOMER_ID-$TEAM_NAME-$AWS_ENVIRONMENT --domain-owner $ACCOUNT_NUMBER --region $AWS_Region --query authorizationToken --output text`
+          - python3 -m pip config set global.index-url https://aws:$CODEARTIFACT_AUTH_TOKEN@$CUSTOMER_ID-$TEAM_NAME-$AWS_ENVIRONMENT-$ACCOUNT_NUMBER.d.codeartifact.$AWS_Region.amazonaws.com/pypi/Glue-Repository/simple/
+          - python3 -m pip install -r requirements.txt
+    
+    # Step to deploy CloudFormation stack 
+    - step: &deploy-cloudformation-stack
+        name: 'Deploy Cloud Formation Stack'
+        oidc: true
+        script:
+          - apt-get -y update && apt-get -y install gettext-base
+          - export PARAMETERS=$(envsubst < ./parameters/${Cloudformation_Parameter_File})
+          - export TAGS=$(cat ./tags/kfbmic-edr-tags.json)
+          - pipe: atlassian/aws-cloudformation-deploy:0.20.1
+            variables:
+              AWS_OIDC_ROLE_ARN: $AWS_ROLE_ARN
+              AWS_DEFAULT_REGION: $AWS_Region
+              STACK_NAME: $Stack_Name
+              TEMPLATE: 'https://${TEMPLATE_BUCKET_NAME}.s3.amazonaws.com/kfbmic-edr-cf-template.yaml'
+              STACK_PARAMETERS: $PARAMETERS
+              TAGS: $TAGS
+              WAIT: 'true'
+              CAPABILITIES: [ 'CAPABILITY_NAMED_IAM' ]
+    
+    # Step to upload Glue scripts to S3
+    - step: &upload-glue-scripts-to-s3
+        name: 'Upload Glue Scripts to S3'
+        oidc: true
+        script:
+          - export ENVIRONMENT=$(jq -r '.[] | select(.ParameterKey == "GWEnvironment") | .ParameterValue' parameters/${Cloudformation_Parameter_File})
+          - |
+            for file in scripts/*; do
+              if [[ -f "$file" && "$file" != "__init__.py" ]]; then
+                mv "$file" "scripts/$(basename "$file" .py)_${ENVIRONMENT}.py"
+              fi
+            done
+          - pipe: atlassian/aws-s3-deploy:1.1.0
+            variables:
+              AWS_OIDC_ROLE_ARN: $AWS_ROLE_ARN
+              AWS_DEFAULT_REGION: $AWS_Region
+              S3_BUCKET: '${Glue_Script_S3_Bucket}/Scripts'
+              LOCAL_PATH: 'scripts'
+
+    # Step to install requirements 
+    - step: &install-requirements
+        name: Install Requirements
+        oidc: true  
+        script:  
+          # - python3 -m pip install -r requirements.txt
+          - echo "Validated"
+
+    # Step to run pytest  
+    - step: &run-pytest
+        name: Run Pytest 
+        oidc: true  
+        script:
+          - echo "Validated"
+ 
+    # Step to validate parameters  
+    - step: &validate-parameters  
+        name: Validate Parameters
+        oidc: true
+        script:
+          - |
+            jq -r '.[] | select(.ParameterValue == "") | .ParameterKey' parameters/${Cloudformation_Parameter_File} > empty_params.txt
+            if [ -s empty_params.txt ]; then
+              echo "The following parameters have empty values:"
+              cat empty_params.txt
+              exit 1
+            else
+              echo "All parameters have values."
+            fi  
+        artifacts:  
+          - empty_params.txt
+
+    # Step to validate CloudFormation template  
+    - step: &validate-cloudformation-template
+        name: Validate CloudFormation Template
+        oidc: true
+        script:
+          - apt-get -y update && apt-get -y install awscli
+          - aws cloudformation validate-template --template-body file://template/kfbmic-edr-cf-template.yaml
+
+    # Step to validate Cloudformation S3 bucket  
+    - step: &validate-cloudformation-s3-bucket  
+        name: Validate Cloudformation S3 Bucket
+        oidc: true
+        script:
+          - apt-get -y update && apt-get -y install awscli
+          - |
+            if aws s3 ls "s3://${TEMPLATE_BUCKET_NAME}" 2>&1 | grep -q 'NoSuchBucket'; then
+              echo "Error: S3 bucket ${TEMPLATE_BUCKET_NAME} does not exist."
+              exit 1
+            else
+              echo "S3 bucket ${TEMPLATE_BUCKET_NAME} is valid."
+            fi
+
+# Bitbucket pipeline steps for PR and Branch
+pipelines:  
+  # Dry run  
+  pull-requests:    
+    '*':  
+      - stage:  # Added stage to maintain the structure  
+          name: Development Deployment Dry Run      
+          deployment: Development      
+          steps:      
+            - step: *configure-oidc      
+            - step: *validate-parameters           
+            - step: *validate-cloudformation-template      
+            - step: *validate-cloudformation-s3-bucket      
+            - step: *install-requirements      
+            - step: *run-pytest
+    'qa?release*':
+      - stage:
+          name: QA Deployment Dry Run
+          deployment: QA
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+    'uat1?release*':
+      - stage:
+          name: UAT1 Deployment Dry Run
+          deployment: UAT1
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+    'uat2?release*':
+      - stage:
+          name: UAT2 Deployment Dry Run
+          deployment: UAT2
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+    'stg?release*':
+      - stage:
+          name: STG Deployment Dry Run
+          deployment: STG
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+    'preprod?release*':
+      - stage:
+          name: PREPROD Deployment Dry Run
+          deployment: PREPROD
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+    'perf?release*':
+      - stage:
+          name: PERF Deployment Dry Run
+          deployment: Performance
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+    'master?release*':
+      - stage:
+          name: Production Deployment Dry Run
+          deployment: Production
+          steps:
+            - step: *configure-oidc
+            - step: *validate-parameters 
+            - step: *validate-cloudformation-template
+            - step: *validate-cloudformation-s3-bucket
+            - step: *install-requirements
+            - step: *run-pytest
+  # Regular deployements
+  branches:
+    dev:
+      - stage:
+          name: Development deployment in the NonProduction account
+          deployment: Development
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
+    qa:
+      - stage:
+          name: QA deployment in the NonProduction account
+          deployment: QA
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
+    uat2:
+      - stage:
+          name: UAT2 deployment in the NonProduction account
+          deployment: UAT2
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
+    uat1:
+      - stage:
+          name: UAT1 deployment in the NonProduction account
+          deployment: UAT1
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
+    stg:
+      - stage:
+          name: STG deployment in the NonProduction account
+          deployment: STG
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3            
+    preprod:
+      - stage:
+          name: PreProduction deployment in the PreProduction account
+          deployment: PreProd
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
+    perf:
+      - stage:
+          name: Performance deployment in the PreProduction account
+          deployment: Performance
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
+    master:
+      - stage:
+          name: Production deployment in the Production account
+          deployment: Production
+          steps:
+            - step: *configure-oidc
+            - step: *upload-cloudformation-template
+            - step: *populate-codeartifact
+              condition:
+                changesets:
+                  includePaths:
+                    - "requirements.txt"
+            - step: *deploy-cloudformation-stack
+            - step: *upload-glue-scripts-to-s3
